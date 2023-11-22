@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+  <style>
+
+    body {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      display: block;
+    }
+
+
+  </style>
+
+</head>
+<body>
+  <script type="module">
+
+    import * as THREE from 'https://threejs.org/build/three.module.js';
+    import { VRButton } from 'https://threejs.org/examples/jsm/webxr/VRButton.js';
+
+    let scene = new THREE.Scene();
+    let camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    let renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true; // Enable WebXR
+    document.body.appendChild(renderer.domElement);
+
+    let geometry = new THREE.BoxGeometry();
+    let material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    let cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+
+    camera.position.z = 5;
+
+    document.body.appendChild(VRButton.createButton(renderer)); // Create VR button
+
+    function animate() {
+      renderer.setAnimationLoop(render); // Use setAnimationLoop for WebXR
+    }
+
+    function render() {
+      cube.rotation.x += 0.01;
+      cube.rotation.y += 0.01;
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

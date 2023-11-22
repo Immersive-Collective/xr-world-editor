@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        body {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./static/libs/three/build/three.module.js",
+                "three/addons/": "./static/libs/three/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+    import { VRButton } from 'three/addons/webxr/VRButton.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+    import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+
+    /* Camera Preseted Positions */
+
+    let cameraPositions = [];
+    import * as cameraPositionsData from './static/libs/data/cameraPositions.js'
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);      
+
+    // Creating our own little universe called 'playground'
+    let playground = new THREE.Scene();
+    playground.background = new THREE.Color(0xADD8E6); // Light blue
+
+    // 'MagicEye' lets us see the 3D world
+    let magicEye = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+    // 'MagicBrush' is our tool to paint the 3D world onto the screen
+    let magicBrush = new THREE.WebGLRenderer({antialias: true});
+    magicBrush.setSize(window.innerWidth, window.innerHeight);
+    magicBrush.xr.enabled = true; // Enabling our magic to see in 3D (WebXR)
+
+    //document.body.appendChild(magicBrush.domElement);
+
+    container.appendChild(magicBrush.domElement);    
+
+    // 'BuildingBlock' is the shape we'll use to build something fun
+    let buildingBlock = new THREE.BoxGeometry();
+    // 'ColorSplash' is the color we'll paint our building block
+    let colorSplash = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+
+    // 'MagicCube' is what we build using our building block and color
+    let magicCube = new THREE.Mesh(buildingBlock, colorSplash);
+    playground.add(magicCube);
+
+    // Positioning our MagicEye to get the best view
+    magicEye.position.set(0,1,3)
+
+    // Creating a magic button to enter the 3D world
+    document.body.appendChild(VRButton.createButton(magicBrush));
+
+    // 'StartPlaying' begins the fun in our 3D world
+    function startPlaying() {
+      magicBrush.setAnimationLoop(magicShow); // MagicShow is the ongoing fun in our playground
+    }
+
+    // Inside the 'MagicShow' function:
+    function magicShow() {
+      // Make the 'MagicCube' spin and dance! We change its rotation a little bit each time.
+      magicCube.rotation.x += 0.01; // This line makes the MagicCube tilt up and down.
+      magicCube.rotation.y += 0.01; // And this line makes it spin left and right.
+
+      // The 'MagicBrush' draws our entire 'Playground' so we can see it through the 'MagicEye'.
+      magicBrush.render(playground, magicEye); // It's like painting our 3D world over and over, super fast!
+    }
+
+
+    // light
+    const hemilight = new THREE.HemisphereLight(0xf6ffff, 0xfffddc, 1.3);
+    playground.add(hemilight);
+
+    const light = new THREE.DirectionalLight(0xe6ffff, 3);
+
+    playground.add(light);
+
+    light.position.set(0, 20, -20);
+    light.castShadow = true;
+    light.shadow.camera.left = -5;
+    light.shadow.camera.right = 5;
+    light.shadow.camera.top = 5;
+    light.shadow.camera.bottom = -5;
+    light.shadow.camera.near = 0.3;
+    light.shadow.camera.far = 512;
+    light.shadow.mapSize.set(256 * 10, 256 * 10);
+    light.shadow.radius = 1;    
+
+
+    // ORBIT CONTROLS
+    const controls = new OrbitControls(magicEye, container);
+
+    controls.enableDamping = false;
+
+    //controls.dampingFactor = 0.5;
+    //controls.minPolarAngle = 0;
+    // controls.maxPolarAngle = Math.PI / 2.1; // This is already the default, means camera can't go more than 90 degrees.
+    
+    controls.minDistance = 0.25; // The closest the camera can get to the target
+    controls.maxDistance = 900; // The farthest the camera can be from the target
+    const debouncedSave = debounce(saveCameraPosition, 300); // 300ms delay
+    controls.addEventListener("end", debouncedSave);
+
+    /* Controls */
+
+    /* Camera Positions */
+    const DEFAULT_CAMERA_ROT =
+        '{"isEuler":true,"_x":-0.4890319918221778,"_y":0.029905380566305973,"_z":0.015910295468581418,"_order":"XYZ"}';
+    const DEFAULT_CAMERA_POS =
+        '{"x":0.3966156804487375,"y":8.240668844853648,"z":16.11327172278412}';
+    const DEFAULT_CONTROLS_TARGET =
+        '{"x":-1.8977369150584633,"y":-27.789645896127855,"z":-51.59438146811678}';
+
+
+
+    function debounce(func, wait) {
+        let timeout;
+        return function (...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), wait);
+        };
+    }
+
+
+    function saveCameraPosition() {
+        let camera = magicEye;
+        const cameraData = {
+            position: camera.position.clone(),
+            rotation: camera.rotation.clone(),
+        };
+        const controlsData = { target: controls.target.clone() };
+        // Store individual data (optional based on your use case)
+        localStorage.setItem("cameraData", JSON.stringify(cameraData));
+        localStorage.setItem("controlsData", JSON.stringify(controlsData));
+        // Store combined data
+        cameraPositions.push({ camera: cameraData, controls: controlsData });
+        localStorage.setItem("cameraPositions", JSON.stringify(cameraPositions));
+        console.log(JSON.stringify(cameraPositions[cameraPositions.length - 1]));
+    }
+
+
+    function restoreCameraPosition() {
+      let camera = magicEye;
+        try {
+            if (localStorage.getItem("cameraPositions") && camera) {
+                let data = JSON.parse(localStorage.getItem("cameraPositions"));
+                let cam = data[data.length - 1].camera;
+                let con = data[data.length - 1].controls;
+                camera.position.copy(new THREE.Vector3().copy(cam.position));
+                camera.rotation.set(cam.rotation.x, cam.rotation.y, cam.rotation.z);
+                if (controls) {
+                    controls.target.copy(new THREE.Vector3().copy(con.target));
+                }
+            } else {
+                // Use the default values if no data is available in localStorage
+                camera.position.copy(
+                    new THREE.Vector3().fromJSON(JSON.parse(DEFAULT_CAMERA_POS)),
+                );
+                let defaultRot = JSON.parse(DEFAULT_CAMERA_ROT);
+                camera.rotation.set(defaultRot._x, defaultRot._y, defaultRot._z);
+                if (controls) {
+                    controls.target.copy(
+                        new THREE.Vector3().fromJSON(
+                            JSON.parse(DEFAULT_CONTROLS_TARGET),
+                        ),
+                    );
+                }
+            }
+            controls.update();
+        } catch (error) {
+            console.error("Error restoring camera position:", error);
+        }
+    }
+
+
+  function saveScene() {
+
+    console.log("saveScene")
+      
+      const sceneObjects = [];
+
+      playground.traverse((object) => {
+
+          console.log("traverse:" , object.name, object.isMesh, object.userData)
+
+          if (object.userData.fileName) {
+
+              console.log("object.userData.fileName",object.userData.fileName)
+              sceneObjects.push({
+                  fileName: object.userData.fileName, // Store only the file name
+                  position: object.position.toArray(),
+                  rotation: object.rotation.toArray(),
+                  scale: object.scale.toArray()
+              })
+              ;
+          }
+      });
+
+      localStorage.setItem('scene', JSON.stringify(sceneObjects));
+  }
+
+
+  function modelTree(model) {
+
+
+       model.traverse((object) => {
+
+        console.log(object)
+
+      });   
+
+
+
+  }
+
+  window.modelTree = modelTree;
+
+
+
+
+  function loadScene() {
+      const savedScene = localStorage.getItem('scene');
+      if (savedScene) {
+          const sceneObjects = JSON.parse(savedScene);
+          sceneObjects.forEach((obj) => {
+              const modelPath = './models/' + obj.fileName; // Path to the model in the models folder
+
+              const dracoLoader = new DRACOLoader();
+              dracoLoader.setDecoderPath('static/libs/draco/'); 
+
+              const loader = new GLTFLoader();
+              loader.setDRACOLoader(dracoLoader);
+
+              loader.load(modelPath, (gltf) => {
+                  let model = gltf.scene;
+                  model.position.fromArray(obj.position);
+                  model.rotation.fromArray(obj.rotation);
+                  model.scale.fromArray(obj.scale);
+                  model.userData.fileName = obj.fileName;
+                  playground.add(model);
+              });
+          });
+      }
+  }
+
+
+    // enabling 3D models to be able placed to the scene
+    let loader = new GLTFLoader(); // GLTFLoader to load the 3D model
+
+    // Function to load a model and add it to the scene at a random position
+    function loadModel(file) {
+        const filePath = URL.createObjectURL(file);
+
+        const dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath('static/libs/draco/'); 
+
+        const loader = new GLTFLoader();
+        loader.setDRACOLoader(dracoLoader);
+
+        loader.load(filePath, function(gltf) {
+            let model = gltf.scene;
+            model.position.set(Math.random() * 30 - 10, 1, Math.random() * 30 - 10);
+            model.userData.fileName = file.name; // Store the file name
+            console.log("Store fileName:", file.name)
+            playground.add(model);
+            saveScene(); // Update the saved scene
+        });
+    }
+
+
+    // Drag and Drop setup
+    document.body.ondragover = (event) => event.preventDefault();
+    document.body.ondrop = (event) => {
+        event.preventDefault();
+        let file = event.dataTransfer.files[0];
+        if (file && (file.name.endsWith('.glb') || file.name.endsWith('.gltf'))) {
+            loadModel(file);
+        } else {
+            alert('Please drop a .glb file.');
+        }
+    };
+
+    function onWindowResize() {
+      let camera = magicEye;
+      let renderer = magicBrush;
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+
+
+
+let isGrabMode = false;
+let grabbedObject = null;
+
+// Create a plane geometry and material
+let planeGeometry = new THREE.PlaneGeometry(100, 100);
+let planeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+let visualPlane = new THREE.Mesh(planeGeometry, planeMaterial);
+visualPlane.isVisualPlane = true;
+playground.add(visualPlane);
+
+// Assuming you have a Three.js scene set up
+let raycaster = new THREE.Raycaster();
+let mouse = new THREE.Vector2();
+
+let selectedObject = null;
+let outlineObject = null;
+
+let grabSphere
+
+function initGrabSphere() {
+    let sphereGeometry = new THREE.SphereGeometry(2, 32, 32);
+    let sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
+    grabSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    grabSphere.visible = false;
+    playground.add(grabSphere);
+
+    visualPlane.visible = false;
+}
+
+
+function onMouseClick(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, magicEye);
+
+    const intersects = raycaster.intersectObjects(playground.children, true)
+                                 .filter(intersect => !intersect.object.isOutline && !intersect.object.isVisualPlane);
+
+    if (isGrabMode) {
+        isGrabMode = false;
+        grabbedObject = null;
+        visualPlane.visible = false;
+        grabSphere.visible = false;
+        return;
+    }
+
+    if (intersects.length > 0) {
+        if (!isGrabMode) {
+            grabbedObject = intersects[0].object; // Assign grabbedObject here
+        }
+
+        if (outlineObject) {
+            playground.remove(outlineObject);
+            outlineObject = null;
+        }
+
+        selectedObject = intersects[0].object;
+        outlineObject = selectedObject.clone(true);
+        outlineObject.isOutline = true;
+
+        if (selectedObject.parent && selectedObject.parent !== playground) {
+            outlineObject.applyMatrix4(selectedObject.parent.matrixWorld);
+        }
+
+        outlineObject.scale.multiplyScalar(1.012);
+        outlineObject.material = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.25 });
+
+        const worldPosition = new THREE.Vector3();
+        selectedObject.getWorldPosition(worldPosition);
+
+        const cameraDirection = new THREE.Vector3();
+        magicEye.getWorldDirection(cameraDirection);
+        visualPlane.position.copy(worldPosition);
+        visualPlane.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cameraDirection.negate());
+
+        playground.add(outlineObject);
+    } else {
+        if (outlineObject) {
+            playground.remove(outlineObject);
+            outlineObject = null;
+        }
+    }
+}
+
+document.addEventListener('mousemove', (event) => {
+    if (isGrabMode && grabSphere.visible) {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, magicEye);
+        const planeNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(visualPlane.quaternion);
+        const plane = new THREE.Plane();
+        plane.setFromNormalAndCoplanarPoint(planeNormal, visualPlane.position);
+        const intersectPoint = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(plane, intersectPoint)) {
+            grabSphere.position.copy(intersectPoint);
+
+            if (grabbedObject) {
+                if (grabbedObject.parent) {
+                    // Convert the intersect point to the local coordinate system of the grabbedObject's parent
+                    const localIntersectPoint = grabbedObject.parent.worldToLocal(intersectPoint.clone());
+                    grabbedObject.position.copy(localIntersectPoint);
+                } else {
+                    // If the grabbedObject has no parent, simply copy the position
+                    grabbedObject.position.copy(intersectPoint);
+                }
+            }
+        }
+    }
+});
+
+/* Keys - keyboard */
+
+
+function updatePosition(direction, shiftMultiplier, normalMultiplier) {
+    const movementScale = shiftMultiplier ? 0.1 : normalMultiplier;
+    selectedObject.position.addScaledVector(direction, movementScale);
+    saveScene();
+}
+
+function updateScale(isIncreasing) {
+    const scaleMultiplier = isIncreasing ? 1.01 : 0.99;
+    selectedObject.scale.multiplyScalar(scaleMultiplier);
+    outlineObject.scale.copy(selectedObject.scale).multiplyScalar(1.012);
+    saveScene();
+}
+
+function rotateObject() {
+    const q = new THREE.Quaternion();
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.1);
+    selectedObject.quaternion.premultiply(q);
+    outlineObject.quaternion.premultiply(q);
+    saveScene();
+}
+
+function toggleGrabMode() {
+    isGrabMode = !isGrabMode;
+    visualPlane.visible = isGrabMode;
+    grabSphere.visible = isGrabMode;
+    if (!isGrabMode) {
+        grabbedObject = null;
+    } else if (selectedObject) {
+        grabSphere.position.copy(selectedObject.position);
+    }
+}
+
+function duplicateObject(shiftKeyPressed) {
+    if (shiftKeyPressed) {
+        const newObject = selectedObject.clone(true);
+        const newGroup = new THREE.Group();
+        newGroup.add(newObject);
+        newGroup.userData = selectedObject.parent.userData;
+        playground.add(newGroup);
+        randomizeTransform(newGroup);
+        console.log("cloning");
+        saveScene();
+    }
+}
+
+function removeObject() {
+    if (outlineObject && outlineObject.parent) {
+        outlineObject.parent.remove(outlineObject);
+    }
+    outlineObject = null;
+    if (selectedObject.parent) {
+        selectedObject.parent.remove(selectedObject);
+    } else {
+        playground.remove(selectedObject);
+    }
+    selectedObject = null;
+    saveScene();
+}
+
+function randomizeTransform(group) {
+    group.position.set(Math.random() * 50 - Math.random() * 50, Math.random() * 50 - Math.random() * 50, Math.random() * 50 - Math.random() * 50);
+    group.rotation.set(Math.random() * 3.14, Math.random() * 3.14, Math.random() * 3.14);
+    group.scale.set(Math.random() * 2, Math.random() * 2, Math.random() * 2);
+}
+
+
+document.addEventListener('keydown', (event) => {
+    if (!selectedObject) return;
+
+    const forward = new THREE.Vector3();
+    magicEye.getWorldDirection(forward);
+    forward.y = 0;
+    forward.normalize();
+
+    const strafe = new THREE.Vector3();
+    strafe.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+    if (event.key.toLowerCase() === 'g') {
+        toggleGrabMode();
+    }
+
+    switch (event.key) {
+        case 'd':
+        case 'D':
+            duplicateObject(event.shiftKey);
+            break;
+        case 'ArrowUp':
+            updatePosition(new THREE.Vector3(0, 1, 0), event.shiftKey, forward.length());
+            break;
+        case 'ArrowDown':
+            updatePosition(new THREE.Vector3(0, -1, 0), event.shiftKey, -forward.length());
+            break;
+        case 'ArrowLeft':
+            updatePosition(strafe, false, -0.1);
+            break;
+        case 'ArrowRight':
+            updatePosition(strafe, false, 0.1);
+            break;
+        case 's':
+        case 'S':
+            updateScale(!event.shiftKey);
+            break;
+        case 'r':
+        case 'R':
+            rotateObject();
+            break;
+        case 'x':
+        case 'X':
+            removeObject();
+            break;
+    }
+
+    if (selectedObject) {
+        const worldPosition = new THREE.Vector3();
+        selectedObject.getWorldPosition(worldPosition);
+        outlineObject.position.copy(worldPosition);
+    }
+});
+
+
+
+
+// document.addEventListener('keydown', (event) => {
+
+//     if (!selectedObject) return;
+
+//     // Update the direction the camera is facing each time a key is pressed
+//     const forward = new THREE.Vector3();
+//     magicEye.getWorldDirection(forward);
+//     forward.y = 0; // Keep the movement in the horizontal plane
+//     forward.normalize();
+
+//     // Calculate the strafe (right) vector
+//     const strafe = new THREE.Vector3();
+//     strafe.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+
+//   if (event.key === 'g' || event.key === 'G') {
+//       if (!isGrabMode && selectedObject) {
+//           isGrabMode = true;
+//           visualPlane.visible = true;
+//           grabSphere.visible = true;
+//           grabSphere.position.copy(selectedObject.position);
+//       } else if (isGrabMode) {
+//           isGrabMode = false;
+//           visualPlane.visible = false;
+//           grabSphere.visible = false;
+//           grabbedObject = null;
+//       }
+//   }
+
+
+
+//     switch (event.key) {
+//         case 'd':
+//         case 'D':
+//             if (event.shiftKey) {
+//               // duplicate
+//                const newObject = selectedObject.clone(true);
+//                const newGroup = new THREE.Group();
+//                newGroup.add(newObject)
+//                newGroup.userData = selectedObject.parent.userData
+//                playground.add(newGroup)
+//                newGroup.position.set(Math.random()*50-Math.random()*50,Math.random()*50-Math.random()*50,Math.random()*50-Math.random()*50);
+//                newGroup.rotation.set(Math.random()*3.14,Math.random()*3.14,Math.random()*3.14);
+//                newGroup.scale.set(Math.random()*2,Math.random()*2,Math.random()*2);
+//                console.log("cloning")
+//             } else {
+                
+//             }
+//             saveScene();
+//             break;
+
+//         case 'ArrowUp':
+//             if (event.shiftKey) {
+//                 selectedObject.position.y += 0.1; // Move up (along Y axis)
+//             } else {
+//                 selectedObject.position.add(forward.multiplyScalar(0.1)); // Move forward
+//             }
+//             saveScene();
+//             break;
+//         case 'ArrowDown':
+//             if (event.shiftKey) {
+//                 selectedObject.position.y -= 0.1; // Move down (along Y axis)
+//             } else {
+//                 selectedObject.position.sub(forward.multiplyScalar(0.1)); // Move backward
+//             }
+//             saveScene();
+//             break;
+//         case 'ArrowLeft':
+//             // Move left - subtract the strafe vector
+//             selectedObject.position.sub(strafe.multiplyScalar(0.1));
+//             saveScene();
+//             break;
+//         case 'ArrowRight':
+//             // Move right - add the strafe vector
+//             selectedObject.position.add(strafe.multiplyScalar(0.1));
+//             saveScene();
+//             break;
+//         case 's':
+//         case 'S':
+//             if (event.shiftKey) {
+//                 // Decrease scale
+//                 selectedObject.scale.multiplyScalar(0.99);
+//                 console.log("scale - ")
+//             } else {
+//                 // Increase scale
+//                 selectedObject.scale.multiplyScalar(1.01);
+//                 console.log("scale + ")
+//             }
+//             outlineObject.scale.copy(selectedObject.scale).multiplyScalar(1.012);
+//             saveScene();
+//             break; 
+//         case 'r':
+//         case 'R':
+//             const q = new THREE.Quaternion();
+//             q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.1); // Rotate by 0.1 radians
+//             selectedObject.quaternion.premultiply(q);
+//             outlineObject.quaternion.premultiply(q);
+//             saveScene();
+//             break;
+//         case 'x':
+//         case 'X':
+//             if (outlineObject) {
+//                 if (outlineObject.parent) {
+//                     outlineObject.parent.remove(outlineObject);
+//                 }
+//                 outlineObject = null;
+//             }
+//             if (selectedObject.parent) {
+//                 selectedObject.parent.remove(selectedObject);
+//             } else {
+//                 playground.remove(selectedObject);
+//             }
+//             selectedObject = null;
+//             saveScene();
+//             break;
+//     }
+
+//     const worldPosition = new THREE.Vector3();
+//     selectedObject.getWorldPosition(worldPosition);
+//     outlineObject.position.copy(worldPosition);
+
+// });
+
+
+    window.playground = playground
+
+    // Add event listener for mouse clicks
+    document.addEventListener('click', onMouseClick);
+
+
+    window.addEventListener('resize', onWindowResize);
+
+    restoreCameraPosition();
+
+    loadScene();
+
+    initGrabSphere();    
+
+    startPlaying();    
+
+
+  </script>
+</body>
+
+</html>
