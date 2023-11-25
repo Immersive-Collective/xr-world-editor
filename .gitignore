@@ -1,4 +1,10 @@
 
+*.glb
+*.fbx
+
+models/
+
+
 share/
 certs/
 
