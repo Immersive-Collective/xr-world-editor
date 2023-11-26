@@ -71,6 +71,18 @@ const tronLegacyColors = {
 /* Teleportation - Controllers */
 
 
+let world
+let groundHeight = 0;
+let gravity = { x: 0.0, y: -2, z: 0.0 };
+let eventQueue
+
+window.myRapierWorld
+window.rigidBodies = window.rigidBodies || [];
+window.threeCubes = window.threeCubes || [];
+
+
+
+
 /* Controllers */
 
 const objsToTest = [];
@@ -560,35 +572,116 @@ function switchMode() {
     console.log("Switched to mode:", currentMode);
 }
 
-function update() {
-    updateRaycasting();    // Existing raycasting updates
-    checkRingCollision();  // New function for checking ring collisions
-}
+// function update() {
+//     updateRaycasting();    // Existing raycasting updates
+//     checkRingCollision();  // New function for checking ring collisions
+// }
 
 function checkRingCollision() {
-    // Create vectors to store world positions
-    const ring1WorldPosition = new THREE.Vector3();
-    const ring2WorldPosition = new THREE.Vector3();
+    // Check if both controller1.ring and controller2.ring are defined
+    if (controller1 && controller1.ring && controller2 && controller2.ring) {
+        // Create vectors to store world positions
+        const ring1WorldPosition = new THREE.Vector3();
+        const ring2WorldPosition = new THREE.Vector3();
 
-    // Get world positions of the rings
-    controller1.ring.getWorldPosition(ring1WorldPosition);
-    controller2.ring.getWorldPosition(ring2WorldPosition);
+        // Get world positions of the rings
+        controller1.ring.getWorldPosition(ring1WorldPosition);
+        controller2.ring.getWorldPosition(ring2WorldPosition);
 
-    // Check for ring collision using world positions
-    const distance = ring1WorldPosition.distanceTo(ring2WorldPosition);
-    //console.log("Rings distance:", distance);
+        // Check for ring collision using world positions
+        const distance = ring1WorldPosition.distanceTo(ring2WorldPosition);
 
-    if (distance < collisionThreshold && !isColliding && !collisionCooldown) {
-        isColliding = true;
-        switchMode();
-        startCooldown(); // Start the cooldown period
-    } else if (distance >= collisionThreshold && isColliding) {
-        isColliding = false; // Rings are no longer colliding
+        if (distance < collisionThreshold && !isColliding && !collisionCooldown) {
+            isColliding = true;
+            switchMode();
+            startCooldown(); // Start the cooldown period
+        } else if (distance >= collisionThreshold && isColliding) {
+            isColliding = false; // Rings are no longer colliding
+        }
     }
 }
 
 
 /* Shooting balls */
+
+function addRapierGround() {
+
+    console.log("addRapierGround");
+
+    let scene = playground;
+
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('/static/libs/draco/');
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
+
+    loader.load('{{ url_for('static', filename='models/ground.glb') }}', gltf => {
+        let mesh = gltf.scene
+        mesh.name = "PAD"
+        scene.add(mesh);
+
+        mesh.rotation.y = 0
+
+        
+        gltf.scene.traverse(item => {
+
+
+            if (item.isMesh) {
+
+                console.log("isMesh:", item.name)
+
+                const geometry = item.geometry;
+
+                item.castShadow = true;     // allows the node to cast shadows
+                item.receiveShadow = true;                 
+              
+                // swap material for refractions
+                // item.material = new THREE.MeshPhongMaterial({ 
+                //     transparent: true,  opacity: 0.1, 
+                //     color: 0xFFFFFF
+                //     //color: 0xFFFFFF, envMap: envMap1, refractionRatio: 0.98, reflectivity: 0.98
+                // });
+                
+                //item.material = shaderMaterial;
+
+                //console.log(geometry)
+                const vertices = geometry.attributes.position.array;
+                const indices = geometry.index.array;
+                const trimesh = new RAPIER.TriMesh(vertices, indices);
+                // console.log('TriMesh created successfully', trimesh);
+                // console.log('Vertices length:', vertices.length);
+                // console.log('Indices length:', indices.length);
+                let groundColliderDesc = RAPIER.ColliderDesc.trimesh(trimesh)
+                    .setDensity(100)
+                    .setTranslation(0, groundHeight, 0)
+                    .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+                // this part is a kind of hack...
+                groundColliderDesc.shape.indices = indices;
+                groundColliderDesc.shape.vertices = vertices;
+                let groundCollider = world.createCollider(groundColliderDesc);
+
+                window.groundColliderHandle = groundCollider.handle;
+                window.myRapierWorld = world;
+                window.eventQueue = eventQueue;
+
+
+                item.material.wireframe = false;
+
+
+                objsToTest.push(item);
+
+            }
+
+
+
+        })
+
+    })
+
+
+}
+
+
 
 function shootBallFromController(controller) {
     console.log("shootBallFromController:", controller);
@@ -611,6 +704,9 @@ function shootBallFromController(controller) {
 }
 
 function createAndShootBall(startPosition, targetPosition, radius, color, density, speedFactor) {
+
+    let scene = playground;
+
     // Calculate direction from start to target position
     let direction = new THREE.Vector3().subVectors(targetPosition, startPosition).normalize();
 
@@ -754,16 +850,33 @@ document.body.appendChild(VRButton.createButton(magicBrush));
 // 'StartPlaying' begins the fun in our 3D world
 function startPlaying() {
   magicBrush.setAnimationLoop(magicShow); // MagicShow is the ongoing fun in our playground
+
 }
 
 // Inside the 'MagicShow' function:
 function magicShow() {
-  // Make the 'MagicCube' spin and dance! We change its rotation a little bit each time.
-  magicCube.rotation.x += 0.01; // This line makes the MagicCube tilt up and down.
-  magicCube.rotation.y += 0.01; // And this line makes it spin left and right.
 
-  // The 'MagicBrush' draws our entire 'Playground' so we can see it through the 'MagicEye'.
-  magicBrush.render(playground, magicEye); // It's like painting our 3D world over and over, super fast!
+  // // Make the 'MagicCube' spin and dance! We change its rotation a little bit each time.
+  // magicCube.rotation.x += 0.01; // This line makes the MagicCube tilt up and down.
+  // magicCube.rotation.y += 0.01; // And this line makes it spin left and right.
+
+  // // The 'MagicBrush' draws our entire 'Playground' so we can see it through the 'MagicEye'.
+  // magicBrush.render(playground, magicEye); // It's like painting our 3D world over and over, super fast!
+
+
+    updateRapier();
+
+    updateRaycasting();
+
+    checkRingCollision();
+
+    //animateShader();
+
+    magicBrush.render(playground, magicEye);
+
+    magicBrush.setRenderTarget(null); 
+
+
 }
 
 // light
@@ -1251,7 +1364,7 @@ function loadScene() {
 
         // '{{ url_for('static', filename='libs/rapier3d-compat/rapier.es.js') }}';
 
-        dracoLoader.setDecoderPath('{{ url_for('static', filename='libs/draco') }}');
+        dracoLoader.setDecoderPath('/static/libs/draco/');
 
         sceneObjects.forEach((obj) => {
             const modelPath = './models/' + encodeURIComponent(obj.fileName);
@@ -1432,7 +1545,7 @@ function loadModel(file, pos) {
     //const filePath = URL.createObjectURL(file);
 
     const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('static/libs/draco');
+    dracoLoader.setDecoderPath('/static/libs/draco/');
     const loader = new GLTFLoader();
     loader.setDRACOLoader(dracoLoader);
 
@@ -1467,27 +1580,27 @@ function loadModel(file, pos) {
 
 
 // Function to load model from the given URL
-function loadModelFromUrl(url) {
+// function loadModelFromUrl(url) {
 
-    console.log("loadModelFromUrl, url", url);
+//     console.log("loadModelFromUrl, url", url);
 
-    // Assume GLTFLoader and DRACOLoader are correctly set up
-    const loader = new GLTFLoader();
-    // Add the DRACOLoader if necessary
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('static/libs/draco/');
+//     // Assume GLTFLoader and DRACOLoader are correctly set up
+//     const loader = new GLTFLoader();
+//     // Add the DRACOLoader if necessary
+//     const dracoLoader = new DRACOLoader();
+//     dracoLoader.setDecoderPath('/static/libs/draco/');
 
-    loader.setDRACOLoader(dracoLoader);
+//     loader.setDRACOLoader(dracoLoader);
 
-    loader.load(url, function (gltf) {
-        let model = gltf.scene;
-        // Rest of your logic to position and add the model to the scene
-        // ...
-        playground.add(model);
+//     loader.load(url, function (gltf) {
+//         let model = gltf.scene;
+//         // Rest of your logic to position and add the model to the scene
+//         // ...
+//         playground.add(model);
 
-        saveScene(); // Update the saved scene
-    });
-}
+//         saveScene(); // Update the saved scene
+//     });
+// }
 
 
 document.body.ondrop = (event) => {
@@ -2318,9 +2431,17 @@ async function initRapier() {
 
     await RAPIER.init();
 
+    world = new RAPIER.World(gravity);
+    eventQueue = new RAPIER.EventQueue(true);
+
+
+    addRapierGround();
+
+
     initControllers()
     
 }
+
 
 
 
