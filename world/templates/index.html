@@ -1505,7 +1505,6 @@ function connectWebSocket() {
 
         //console.log(" WS: data.type", data.type)
 
-
         // if (data.type === 'clientDisconnected') {
         //     console.log("ws: clientDisconnected: ", data.client_id, data.clients);
         // }
@@ -1515,14 +1514,14 @@ function connectWebSocket() {
             const url = URL.createObjectURL(blob);
             const url_uuid = data.url_uuid
             
-            loadModel(url, data.pos, url_uuid);
+            loadModel(url, data, url_uuid);
         }
 
         if (data.type === 'newModelData') {
             const blob = new Blob([base64ToArrayBuffer(data.data)], { type: 'model/gltf-binary' });
             const url = URL.createObjectURL(blob);
             const url_uuid = data.url_uuid            
-            loadNewModel(url, data.pos, url_uuid);
+            loadNewModel(url, data.position, url_uuid);
         }
 
 
@@ -1594,6 +1593,41 @@ function connectWebSocket() {
            playground.remove(playground.getObjectByName(data.uuid))
         }
 
+        if (data.type === 'modelUpdated') {
+
+            let t = playground.getObjectByName(data.uuid)
+            console.log("modelUpdated: data.uuid",data.uuid)
+            
+            let props = data.propName
+
+            console.log(data)
+
+            switch (props) {
+                case "position": 
+                    let p = data.model.position;
+                    console.log("position:", p)
+                    t.position.set(p[0],p[1],p[2]);
+                    break;
+                case "scale":
+                    t.scale.set(data.model.scale[0], data.model.scale[1], data.model.scale[2])
+                    break;
+                case "quaternion":
+
+
+                    let quaternionData = data.model.quaternion;                    
+                    console.log("quaternion:", data.model.quaternion)
+
+                    let q = new THREE.Quaternion(quaternionData[0],quaternionData[1],quaternionData[2],quaternionData[3]);
+                    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.1);
+                    t.quaternion.premultiply(q);
+                    //outlineObject.quaternion.premultiply(q);
+                    break;
+            }
+        }
+
+
+        
+
 
     };
 
@@ -1610,7 +1644,33 @@ function connectWebSocket() {
 
 }
 
-connectWebSocket()
+connectWebSocket();
+
+
+
+function broadcastObjectChange(uuid, value, propName) {
+    let valueToSend;
+
+    if (propName === "position" || propName === "scale") {
+        valueToSend = { x: value.x, y: value.y, z: value.z };
+    } else if (propName === "quaternion") {
+        valueToSend = { x: value.x, y: value.y, z: value.z, w: value.w };
+    }
+
+    console.log(" ---> broadcastObjectChange", uuid, value, propName, valueToSend)
+    const message = {
+        type: "broadcastObjectChange",
+        uuid: uuid,
+        clientID: localStorage.getItem("clientID"),
+        value: valueToSend,
+        propName: propName
+    };
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(message));
+    } else {
+        console.error('WebSocket is not open. Cannot request the model.');
+    }
+}
 
 
 function broadcastNewModel(uuid, pos) {
@@ -1628,12 +1688,12 @@ function broadcastNewModel(uuid, pos) {
 }
 
 
-function requestNewModel(uuid, pos) {
+function requestNewModel(uuid, position) {
     console.log(" ---> requestModel", uuid)
     const message = {
         type: "requestNewModel",
         uuid: uuid,
-        pos: pos
+        position: position
     };
     if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(message));
@@ -1643,12 +1703,12 @@ function requestNewModel(uuid, pos) {
 }
 
 
-function requestModel(uuid, pos) {
+function requestModel(uuid, position) {
     console.log(" ---> requestModel", uuid)
     const message = {
         type: "requestModel",
         uuid: uuid,
-        pos: pos
+        position: position
     };
     if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(message));
@@ -1685,11 +1745,24 @@ function updateMixers() {
     }
 }
 
-function loadModel(file, pos, url_uuid) {
-    console.log(" ---> requestModel", url_uuid);
+function loadModel(file, data, url_uuid) {
 
-    let position = JSON.parse(pos);
-    console.log("position", position);
+    let pos = data.position
+
+    console.log(" ---> loadModel", file, data, url_uuid);
+
+    //let position = {x:pos[0],y:pos[1],z:pos[2]};
+    let position
+    if (Array.isArray(pos)) {
+        console.log("pos -> array")
+        position =  {x:pos[0],y:pos[1],z:pos[2]}
+    } else {
+       console.log("pos -> non array") 
+        position = JSON.parse(pos);
+    }
+
+
+    console.log("position", pos, position);
 
     loader.load(
         file,
@@ -1722,6 +1795,7 @@ function loadModel(file, pos, url_uuid) {
             console.error('Error loading model:', error);
         }
     );
+
 }
 
 
@@ -1792,6 +1866,8 @@ document.body.ondrop = (event) => {
     let intersects = raycaster.intersectObjects(playground.children, true);
     let point = intersects[0].point;
     let pointData = { x: point.x, y: point.y, z: point.z };
+    let scale = [1,1,1];
+    let quaternion = [0,0,0,1];
     let pointString = JSON.stringify(pointData);    
 
 
@@ -1801,6 +1877,8 @@ document.body.ondrop = (event) => {
         formData.append('file', file);
         formData.append('uploader', localStorage.getItem('clientID'));
         formData.append('position', pointString);
+        formData.append('scale', scale);
+        formData.append('quaternion', quaternion);
 
         fetch('/upload', {
             method: 'POST',
@@ -2120,6 +2198,7 @@ function updatePosition(direction, shiftMultiplier, normalMultiplier) {
     const movementScale = shiftMultiplier ? 0.1 : normalMultiplier;
     t.position.addScaledVector(direction, movementScale);
     outlineObject.position.copy(t.position)
+    broadcastObjectChange(t.name, t.position, "position")    
 }
 
 function changeScale(isIncreasing) {
@@ -2127,6 +2206,7 @@ function changeScale(isIncreasing) {
     const scaleMultiplier = isIncreasing ? 1.03 : 0.96;
     t.scale.multiplyScalar(scaleMultiplier);        
     outlineObject.scale.copy(t.scale).multiplyScalar(1.012);
+    broadcastObjectChange(t.name, t.scale, "scale")
 }
 
 function rotateObject() { 
@@ -2136,6 +2216,7 @@ function rotateObject() {
     let t = playground.getObjectByName(outlineObject.name)
     t.quaternion.premultiply(q);
     outlineObject.quaternion.premultiply(q);
+    broadcastObjectChange(t.name, q, "quaternion")
 }
 
 

@@ -65,6 +65,9 @@ async def upload_file():
     file = request.files.get("file")
     uploader_id = request.form.get("uploader")  # Retrieve uploader ID from form data
     position = request.form.get("position")
+    scale = request.form.get("scale")
+    quaternion = request.form.get("quaternion")
+
     if file and allowed_file(file.filename):
         unique_id = str(uuid.uuid4())
         timestamp = str(int(time.time()))
@@ -72,9 +75,13 @@ async def upload_file():
         file_path = os.path.join(UPLOAD_FOLDER, filename)
         file.save(file_path)
         upload_time = datetime.now().isoformat()
+
         metadata = {
+            "uuid": unique_id,
             "original_name": file.filename,
             "position": position,
+            "scale": scale,
+            "quaternion": quaternion,
             "uploader": uploader_id,
             "timestamp": timestamp,
             "upload_time": upload_time,
@@ -84,12 +91,20 @@ async def upload_file():
         with open(os.path.join(UPLOAD_FOLDER, unique_id + ".json"), "w") as json_file:
             json.dump(metadata, json_file)
 
-        model_data = {
-            "uuid": unique_id,
-            "position": position,
-            "filename": filename,
-        }
-        models[unique_id] = model_data
+        # model_data = {
+        #     "uuid": unique_id,
+        #     "original_name": file.filename,
+        #     "position": position,
+        #     "scale": scale,
+        #     "quaternion": quaternion,
+        #     "uploader": uploader_id,
+        #     "timestamp": timestamp,
+        #     "upload_time": upload_time,
+        #     "client_ip": request.remote_addr,
+        #     "file_size": os.path.getsize(file_path),
+        # }
+
+        models[unique_id] = metadata
 
         # Broadcast the new model to all clients except the uploader
         # broadcast_new_model(unique_id, model_data, uploader_id)
@@ -140,6 +155,13 @@ async def sendall(message):
     for client_id in clients:
         client = clients[client_id]["websocket"]
         await client.send(message)
+
+
+async def sendall_except_sender(message, sender_uuid):
+    for client_id in clients:
+        if client_id != sender_uuid:
+            client = clients[client_id]["websocket"]
+            await client.send(message)
 
 
 async def websocket_handler(websocket, path):
@@ -196,7 +218,7 @@ async def websocket_handler(websocket, path):
             elif data["type"] == "requestModel":
                 print(" + requestModel:")
                 model_uuid = data["uuid"]
-                pos = data["pos"]
+                position = data["position"]
                 file_path = get_file_path_from_uuid(model_uuid)
                 if file_path:
                     with open(file_path, "rb") as file:
@@ -212,7 +234,7 @@ async def websocket_handler(websocket, path):
                                     response = {
                                         "type": "modelData",
                                         "data": encoded_contents,
-                                        "pos": pos,
+                                        "position": position,
                                         "url_uuid": model_uuid,
                                     }
                                     await websocket.send(
@@ -234,7 +256,7 @@ async def websocket_handler(websocket, path):
             elif data["type"] == "requestNewModel":
                 print(" + requestNewModel:")
                 model_uuid = data["uuid"]
-                pos = data["pos"]
+                position = data["position"]
                 file_path = get_file_path_from_uuid(model_uuid)
                 if file_path:
                     with open(file_path, "rb") as file:
@@ -253,7 +275,7 @@ async def websocket_handler(websocket, path):
                                     response = {
                                         "type": "newModelData",
                                         "data": encoded_contents,
-                                        "pos": pos,
+                                        "position": position,
                                         "url_uuid": model_uuid,
                                     }
                                     await websocket.send(
@@ -288,26 +310,47 @@ async def websocket_handler(websocket, path):
                 # Broadcast removal to all clients
                 await sendall(json.dumps({"type": "modelRemoved", "uuid": model_uuid}))
 
-            elif data["type"] == "updateModelPosition":
-                print(" - updateModelPosition:")
-                model_uuid = data["uuid"]
-                new_position = data[
-                    "position"
-                ]  # Assuming this is a dictionary with x, y, z
-                if model_uuid in models:
-                    models[model_uuid]["position"] = new_position
-                    # Broadcast updated position to all clients
-                    await sendall(
-                        json.dumps(
-                            {
-                                "type": "modelPositionUpdated",
-                                "uuid": model_uuid,
-                                "position": new_position,
-                            }
-                        )
-                    )
+            elif data["type"] == "broadcastObjectChange":
+                print(" - broadcastObjectChange:")
 
-            # Additional message types can be added here...
+                model_uuid = data["uuid"]
+                props = data["value"]
+                propName = data["propName"]
+                clientID = data["clientID"]
+
+                if model_uuid in models:
+                    if propName == "position":
+                        models[model_uuid]["position"] = [
+                            props["x"],
+                            props["y"],
+                            props["z"],
+                        ]
+                    elif propName == "scale":
+                        models[model_uuid]["scale"] = [
+                            props["x"],
+                            props["y"],
+                            props["z"],
+                        ]
+                    elif propName == "quaternion":
+                        models[model_uuid]["quaternion"] = [
+                            props["x"],
+                            props["y"],
+                            props["z"],
+                            props["w"],
+                        ]
+
+                    data = {
+                        "type": "modelUpdated",
+                        "uuid": model_uuid,
+                        "propName": propName,
+                        "model": models[model_uuid],
+                    }
+
+                    # models[model_uuid] =
+
+                    await sendall_except_sender(json.dumps(data), clientID)
+                else:
+                    print(f"Model with UUID {model_uuid} not found")
 
     except websockets.exceptions.ConnectionClosed:
         print("Client disconnected:", client_uuid)
