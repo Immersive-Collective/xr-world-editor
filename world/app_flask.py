@@ -13,13 +13,6 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-
-import logging
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
 # SSL context for secure connections
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context.load_cert_chain("cert.pem", "key.pem")
@@ -93,27 +86,27 @@ async def upload_file():
 
         # Broadcast the new model to all clients except the uploader
         # broadcast_new_model(unique_id, model_data, uploader_id)
-        # sendall(
-        #     json.dumps(
-        #         {
-        #             "type": "newModel",
-        #             "client_id": unique_id,
-        #             "position": position,
-        #         }
-        #     )
-        # )
+        await sendall(
+            json.dumps(
+                {
+                    "type": "newModel",
+                    "client_id": unique_id,
+                    "position": position,
+                }
+            )
+        )
 
         return jsonify({"uuid": unique_id})
     else:
         return jsonify({"error": "File type not allowed"}), 400
 
 
-# async def broadcast_new_model(uuid, model_data, uploader_id):
-#     print("broadcast_new_model", uuid)
-#     message = json.dumps({"type": "newModel", "uuid": uuid, "model": model_data})
-#     for client_id, client_info in clients.items():
-#         if client_info["uuid"] != uploader_id:
-#             await client_info["websocket"].send(message)
+async def broadcast_new_model(uuid, model_data, uploader_id):
+    print("broadcast_new_model", uuid)
+    message = json.dumps({"type": "newModel", "uuid": uuid, "model": model_data})
+    for client_id, client_info in clients.items():
+        if client_info["uuid"] != uploader_id:
+            await client_info["websocket"].send(message)
 
 
 @app.route("/world/models/<filename>")
@@ -182,7 +175,7 @@ async def websocket_handler(websocket, path):
             if data["type"] == "register":
                 print(" + register:")
                 # Handle 'register' message type...
-                clients[client_uuid]["get_file_path_from_uuid"] = data["uuid"]
+                clients[client_uuid]["uuid"] = data["uuid"]
                 await sendall(
                     json.dumps(
                         {
@@ -201,88 +194,22 @@ async def websocket_handler(websocket, path):
                 if file_path:
                     with open(file_path, "rb") as file:
                         contents = file.read()
-                        # Check if the file size is greater than zero
-                        if len(contents) > 0:
-                            try:
-                                encoded_contents = base64.b64encode(contents).decode(
-                                    "utf-8"
-                                )
-                                # Further check if the encoded content is not empty
-                                if encoded_contents:
-                                    response = {
-                                        "type": "modelData",
-                                        "data": encoded_contents,
-                                        "pos": pos,
-                                        "url_uuid": model_uuid,
-                                    }
-                                    await websocket.send(
-                                        json.dumps(response)
-                                    )  # Send only to requesting client
-                                else:
-                                    print(
-                                        f"Error encoding file contents for UUID: {model_uuid}"
-                                    )
-                            except Exception as e:
-                                print(
-                                    f"Error encoding file for UUID: {model_uuid}: {e}"
-                                )
-                        else:
-                            print(f"File is empty for UUID: {model_uuid}")
+                        encoded_contents = base64.b64encode(contents).decode("utf-8")
+                        response = {
+                            "type": "modelData",
+                            "data": encoded_contents,
+                            "pos": pos,
+                            "url_uuid": model_uuid,
+                        }
+                        await websocket.send(
+                            json.dumps(response)
+                        )  # Send only to requesting client
                 else:
                     print(f"File not found for UUID: {model_uuid}")
-
-            elif data["type"] == "requestNewModel":
-                print(" + requestNewModel:")
-                model_uuid = data["uuid"]
-                pos = data["pos"]
-                file_path = get_file_path_from_uuid(model_uuid)
-                if file_path:
-                    with open(file_path, "rb") as file:
-                        contents = file.read()
-                        file_size = len(contents)
-                        print(f"File size for UUID {model_uuid}: {file_size} bytes")
-                        # await asyncio.sleep(2)  # 2 seconds delay after reading the file
-
-                        if len(contents) > 0:
-                            try:
-                                encoded_contents = base64.b64encode(contents).decode(
-                                    "utf-8"
-                                )
-                                # await asyncio.sleep(2)  # 2 seconds delay after encoding the contents
-                                if encoded_contents:
-                                    response = {
-                                        "type": "newModelData",
-                                        "data": encoded_contents,
-                                        "pos": pos,
-                                        "url_uuid": model_uuid,
-                                    }
-                                    await websocket.send(
-                                        json.dumps(response)
-                                    )  # Send to requesting client
-                                else:
-                                    print(
-                                        f"Error encoding file contents for UUID: {model_uuid}"
-                                    )
-                            except Exception as e:
-                                print(
-                                    f"Error encoding file for UUID: {model_uuid}: {e}"
-                                )
-                        else:
-                            print(f"File is empty for UUID: {model_uuid}")
-                else:
-                    print(f"File not found for UUID: {model_uuid}")
-
-            elif data["type"] == "broadcastNewModel":
-                message = json.dumps(
-                    {"type": "existingModels", "models": list(models.values())}
-                )
-                for client_id, client_info in clients.items():
-                    if client_info["websocket"] != websocket:
-                        await client_info["websocket"].send(message)
 
             elif data["type"] == "removeModel":
+                print(" - removeModel:")
                 model_uuid = data["uuid"]
-                print(f" - removeModel: {model_uuid}")
                 if model_uuid in models:
                     del models[model_uuid]
                 # Broadcast removal to all clients
@@ -326,20 +253,10 @@ async def websocket_handler(websocket, path):
 
 
 def get_file_path_from_uuid(uuid):
-    try:
-        for filename in os.listdir(UPLOAD_FOLDER):
-            if filename.startswith(uuid) and not filename.endswith(".json"):
-                file_path = os.path.join(UPLOAD_FOLDER, filename)
-                if os.path.exists(file_path):
-                    logging.info(f"File found for UUID {uuid}: {file_path}")
-                    return file_path
-                else:
-                    logging.warning(f"File does not exist for UUID {uuid}: {file_path}")
-        logging.warning(f"No file found for UUID {uuid}")
-        return None
-    except Exception as e:
-        logging.error(f"Error in get_file_path_from_uuid for UUID {uuid}: {e}")
-        return None
+    for filename in os.listdir(UPLOAD_FOLDER):
+        if filename.startswith(uuid):
+            return os.path.join(UPLOAD_FOLDER, filename)
+    return None
 
 
 async def start_websocket_server():

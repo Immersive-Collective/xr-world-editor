@@ -6,8 +6,6 @@
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/wcAAwAB/Deus1kAAAAASUVORK5CYII=" />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles/main.css') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-
 </head>
 
 <body id="main-body">
@@ -52,6 +50,13 @@ import { XRHandModelFactory } from '{{ url_for('static', filename='libs/hands/XR
 
 /* Some legacy variables */
 
+
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('/static/libs/draco/');
+const loader = new GLTFLoader();
+loader.setDRACOLoader(dracoLoader);
+
+
 const tronLegacyColors = {
     
     deepBlack: 0x0a0a0a,
@@ -79,8 +84,6 @@ let eventQueue
 window.myRapierWorld
 window.rigidBodies = window.rigidBodies || [];
 window.threeCubes = window.threeCubes || [];
-
-
 
 
 /* Controllers */
@@ -610,14 +613,15 @@ function addRapierGround() {
 
     let scene = playground;
 
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('/static/libs/draco/');
-    const loader = new GLTFLoader();
-    loader.setDRACOLoader(dracoLoader);
+    // const dracoLoader = new DRACOLoader();
+    // dracoLoader.setDecoderPath('/static/libs/draco/');
+    // const loader = new GLTFLoader();
+    // loader.setDRACOLoader(dracoLoader);
 
     loader.load('{{ url_for('static', filename='models/ground.glb') }}', gltf => {
         let mesh = gltf.scene
         mesh.name = "PAD"
+        mesh.ignore = true;
         scene.add(mesh);
 
         mesh.rotation.y = 0
@@ -628,7 +632,7 @@ function addRapierGround() {
 
             if (item.isMesh) {
 
-                console.log("isMesh:", item.name)
+                //console.log("isMesh:", item.name)
 
                 const geometry = item.geometry;
 
@@ -684,6 +688,7 @@ function addRapierGround() {
 
 
 function shootBallFromController(controller) {
+
     console.log("shootBallFromController:", controller);
 
     // The size, density, and speed factor for the ball
@@ -702,6 +707,8 @@ function shootBallFromController(controller) {
     // Create and shoot the ball towards the point sprite
     createAndShootBall(controllerWorldPosition, pointSpriteWorldPosition, ballSize, tronLegacyColors.brightOrange, density, speedFactor);
 }
+
+
 
 function createAndShootBall(startPosition, targetPosition, radius, color, density, speedFactor) {
 
@@ -784,42 +791,18 @@ function updateRapier() {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/* ------------------------- */
 /* Camera Preseted Positions */
+/* ------------------------- */
 
 let cameraPositions = [];
 import * as cameraPositionsData from './static/libs/data/cameraPositions.js'
 
-// Creating our own little universe called 'playground'
 let playground = new THREE.Scene();
 playground.background = new THREE.Color(0xADD8E6); // Light blue
 
-// 'MagicEye' lets us see the 3D world
 let magicEye = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-// 'MagicBrush' is our tool to paint the 3D world onto the screen
 let magicBrush = new THREE.WebGLRenderer({antialias: true, xrCompatible: true});
 magicBrush.setSize(window.innerWidth, window.innerHeight);
 magicBrush.xr.enabled = true; // Enabling our magic to see in 3D (WebXR)
@@ -828,41 +811,25 @@ magicBrush.gammaOutput = true;
 magicBrush.gammaFactor = 1;
 magicBrush.shadowMap.enabled = true;
 
-//document.body.appendChild(magicBrush.domElement);
 container.appendChild(magicBrush.domElement);    
 
-// 'BuildingBlock' is the shape we'll use to build something fun
-let buildingBlock = new THREE.BoxGeometry();
-
-// 'ColorSplash' is the color we'll paint our building block
+let buildingBlock = new THREE.BoxGeometry(0.2,0.2,0.2);
 let colorSplash = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-
-// 'MagicCube' is what we build using our building block and color
 let magicCube = new THREE.Mesh(buildingBlock, colorSplash);
 playground.add(magicCube);
 
-// Positioning our MagicEye to get the best view
 magicEye.position.set(0,1,3)
 
-// Creating a magic button to enter the 3D world
 document.body.appendChild(VRButton.createButton(magicBrush));
 
-// 'StartPlaying' begins the fun in our 3D world
 function startPlaying() {
   magicBrush.setAnimationLoop(magicShow); // MagicShow is the ongoing fun in our playground
-
 }
 
-// Inside the 'MagicShow' function:
 function magicShow() {
 
-  // // Make the 'MagicCube' spin and dance! We change its rotation a little bit each time.
-  // magicCube.rotation.x += 0.01; // This line makes the MagicCube tilt up and down.
-  // magicCube.rotation.y += 0.01; // And this line makes it spin left and right.
-
-  // // The 'MagicBrush' draws our entire 'Playground' so we can see it through the 'MagicEye'.
-  // magicBrush.render(playground, magicEye); // It's like painting our 3D world over and over, super fast!
-
+    magicCube.rotation.x += 0.01; // This line makes the MagicCube tilt up and down.
+    magicCube.rotation.y += 0.01; // And this line makes it spin left and right.
 
     updateRapier();
 
@@ -870,7 +837,7 @@ function magicShow() {
 
     checkRingCollision();
 
-    //animateShader();
+    updateMixers();
 
     magicBrush.render(playground, magicEye);
 
@@ -879,24 +846,7 @@ function magicShow() {
 
 }
 
-// light
-const hemilight = new THREE.HemisphereLight(0x87CEEB, 0x8B4513, 1);
-playground.add(hemilight);
 
-
-const light = new THREE.DirectionalLight(0xe6ffff, 4);
-playground.add(light);
-
-light.position.set(-20, 20, -20);
-light.castShadow = true;
-light.shadow.camera.left = -5;
-light.shadow.camera.right = 5;
-light.shadow.camera.top = 5;
-light.shadow.camera.bottom = -5;
-light.shadow.camera.near = 0.3;
-light.shadow.camera.far = 512;
-light.shadow.mapSize.set(256 * 10, 256 * 10);
-light.shadow.radius = 1;    
 
 
 /* Controls */
@@ -921,7 +871,6 @@ controls.maxDistance = 900; // The farthest the camera can be from the target
 const debouncedSave = debounce(saveCameraPosition, 300); // 300ms delay
 controls.addEventListener("end", debouncedSave);
 
-addHelpers(playground, magicEye, light)
 
 function debounce(func, wait) {
     let timeout;
@@ -939,13 +888,13 @@ function addHelpers(scene, camera, directionalLight) {
     helperLayer.set(1); // Set to layer 1, different from the default layer 0
 
     // GridHelper
-    const size = 100;
+    const size = 500;
     const divisions = 10;
-    const gridHelper = new THREE.GridHelper(size, divisions, 0x333333, 0xFFFFFF);
+    const gridHelper = new THREE.GridHelper(size, divisions, 0x333333, 0xFFFFFF00);
     gridHelper.layers.enable(1); // Assign to layer 1
     gridHelper.ignore = true
     gridHelper.position.set(0,-0.01,0)
-    scene.add(gridHelper);
+    // scene.add(gridHelper);
 
     // CameraHelper
     // const cameraHelper = new THREE.CameraHelper(camera);
@@ -954,11 +903,11 @@ function addHelpers(scene, camera, directionalLight) {
     // scene.add(cameraHelper);
 
     // DirectionalLightHelper
-    const dirLightHelperSize = 5;
+    const dirLightHelperSize = 1;
     const dirLightHelper = new THREE.DirectionalLightHelper(directionalLight, dirLightHelperSize);
     dirLightHelper.layers.enable(1); // Assign to layer 1
     dirLightHelper.ignore = true;
-    scene.add(dirLightHelper);
+    //scene.add(dirLightHelper);
 
     // Create an AxesHelper
     const axesHelper = new THREE.AxesHelper(100); // 5 is the size of the axes
@@ -966,6 +915,36 @@ function addHelpers(scene, camera, directionalLight) {
     playground.add(axesHelper);
 
 }
+
+
+
+function addLights() {
+
+// light
+    const hemilight = new THREE.HemisphereLight(0x87CEEB, 0x8B4513, 3);
+    playground.add(hemilight);
+
+
+    const light = new THREE.DirectionalLight(0xe6ffff, 3);
+    playground.add(light);
+
+    light.position.set(-20, 20, -20);
+    light.castShadow = true;
+    light.shadow.camera.left = -5;
+    light.shadow.camera.right = 5;
+    light.shadow.camera.top = 5;
+    light.shadow.camera.bottom = -5;
+    light.shadow.camera.near = 0.3;
+    light.shadow.camera.far = 512;
+    light.shadow.mapSize.set(256 * 10, 256 * 10);
+    light.shadow.radius = 1;
+
+    addHelpers(playground, magicEye, light)
+  
+}
+
+addLights() 
+
 
 
 
@@ -1161,7 +1140,7 @@ function saveCameraPosition() {
     // Store combined data
     cameraPositions.push({ camera: cameraData, controls: controlsData });
     localStorage.setItem("cameraPositions", JSON.stringify(cameraPositions));
-    console.log(JSON.stringify(cameraPositions[cameraPositions.length - 1]));
+    // console.log(JSON.stringify(cameraPositions[cameraPositions.length - 1]));
 }
 
 function restoreCameraPosition() {
@@ -1275,7 +1254,7 @@ function addGuiForObject(object) {
             remove: () => {
                 removeGuiForObject(object);
                 playground.remove(object);
-                saveScene(); // Update the saved scene after removal
+                //saveScene(); // Update the saved scene after removal
             }
         };
         folder.add(data, 'remove').name('Remove [x]');
@@ -1286,29 +1265,32 @@ function addGuiForObject(object) {
 
 
 
-function saveScene() {
-    console.log("saveScene");
-    const sceneObjects = [];
+// function saveScene() {
 
-    // Traverse and save objects, create GUI entries if they don't exist
-    playground.traverse((object) => {
-        if (object.userData.fileName) {
-            if (!objectList[object.userData.fileName]) {
-                // Only create a new GUI folder if it doesn't exist
-                addGuiForObject(object);
-            }
-            console.log("object.userData.fileName", object.userData.fileName);
-            sceneObjects.push({
-                fileName: object.userData.fileName,
-                position: object.position.toArray(),
-                rotation: object.rotation.toArray(),
-                scale: object.scale.toArray()
-            });
-        }
-    });
+//     console.log("saveScene");
 
-    localStorage.setItem('scene', JSON.stringify(sceneObjects));
-}
+//     const sceneObjects = [];
+
+//     // Traverse and save objects, create GUI entries if they don't exist
+//     playground.traverse((object) => {
+//         if (object.userData.fileName) {
+//             if (!objectList[object.userData.fileName]) {
+//                 // Only create a new GUI folder if it doesn't exist
+//                 addGuiForObject(object);
+//             }
+//             console.log("object.userData.fileName", object.userData.fileName);
+//             sceneObjects.push({
+//                 fileName: object.userData.fileName,
+//                 position: object.position.toArray(),
+//                 rotation: object.rotation.toArray(),
+//                 scale: object.scale.toArray()
+//             });
+//         }
+//     });
+
+//     localStorage.setItem('scene', JSON.stringify(sceneObjects));
+
+// }
 
 
 
@@ -1360,6 +1342,7 @@ function loadScene() {
     if (savedScene) {
         initializeGUI(); // Re-initialize the GUI
         const sceneObjects = JSON.parse(savedScene);
+
         const dracoLoader = new DRACOLoader();
 
         // '{{ url_for('static', filename='libs/rapier3d-compat/rapier.es.js') }}';
@@ -1379,6 +1362,19 @@ function loadScene() {
                 model.userData.fileName = obj.fileName;
                 playground.add(model);
                 addGuiForObject(model); // Add GUI entry for the loaded object
+
+
+
+
+
+
+
+
+
+
+
+
+
             }, undefined, (error) => {
                 console.error('An error happened while loading a model:', error);
             });
@@ -1444,12 +1440,19 @@ function checkConnectionHealth() {
     }
 }
 
+function strSize(base64String) {
+    return parseFloat((Math.ceil(base64String.length * 0.75) / 1048576).toFixed(2));
+}
+
+
+
 
 let ws;
 let conHealth;
-const PING_INTERVAL = 10000; // Adjust this value as needed
+const PING_INTERVAL = 15000;
 let lastPingTimestamp = null;
-const RECONNECT_INTERVAL = 5000; // 5 seconds
+const RECONNECT_INTERVAL = 60000;
+let ws_debug = false;
 
 function connectWebSocket() {
     const protocol = (window.location.protocol === 'https:') ? 'wss://' : 'ws://';
@@ -1469,27 +1472,128 @@ function connectWebSocket() {
 
     ws.onmessage = function (event) {
 
-        const message = JSON.parse(event.data);
+        const data = JSON.parse(event.data);
+
+        // console.log("WS: onmessage:");
+
+        if(ws_debug) {
+
+            for (const key in data) {
+                if (data.hasOwnProperty(key)) {
+                    if (typeof data[key] === 'object' && data[key] !== null) {
+                        // Handling objects - convert to string or iterate over properties
+                        console.log(`\t${key}:`, JSON.stringify(data[key], null, '\t'));
+                    } else if (key === "type") {
+                        // Styling specific property
+                        console.log(`\t%c${key}: ${data[key]}`, "color: blue;");
+                    } else {
+                        // Default log for non-object properties
+
+                        
+                        if(key === "data") {
+                            let size = strSize(data[key])
+                            console.log(`\t${key}: size: %c${size}`, 'color: red');
+                        } else {
+                            console.log(`\t${key}: ${data[key]}`);
+                        }
+
+                    }
+                }
+            }
+
+        }
+
+        //console.log(" WS: data.type", data.type)
 
 
-        if (message.type === 'modelData') {
-            const blob = new Blob([base64ToArrayBuffer(message.data)], { type: 'model/gltf-binary' });
+        // if (data.type === 'clientDisconnected') {
+        //     console.log("ws: clientDisconnected: ", data.client_id, data.clients);
+        // }
+
+        if (data.type === 'modelData') {
+            const blob = new Blob([base64ToArrayBuffer(data.data)], { type: 'model/gltf-binary' });
             const url = URL.createObjectURL(blob);
-            loadModel(url,message.pos);
+            const url_uuid = data.url_uuid
+            
+            loadModel(url, data.pos, url_uuid);
         }
 
-        if (message.type === 'broadcast') {
-            console.log("ws: broadcast: ", message.content, message.room);
-        }    
-
-
-        if (message.type === 'roomUpdate') {
-            console.log("ws: roomUpdate: ", message.room);
+        if (data.type === 'newModelData') {
+            const blob = new Blob([base64ToArrayBuffer(data.data)], { type: 'model/gltf-binary' });
+            const url = URL.createObjectURL(blob);
+            const url_uuid = data.url_uuid            
+            loadNewModel(url, data.pos, url_uuid);
         }
 
-        if (message.type === 'ping') {
-            lastPingTimestamp = Date.now();
-        }    
+
+
+        if (data.type === 'newModel') {
+
+            console.log(`%cnew Model to add!`+data.uuid,"color: red");
+
+             requestModel(data.uuid, data.position);
+
+
+        }
+
+
+        // if (data.type === 'broadcast') {
+        //     console.log("ws: broadcast: ", data.content, data.clients);
+        // }    
+
+        // if (data.type === 'roomUpdate') {
+        //     console.log("ws: roomUpdate: ", data.clients);
+        // }
+
+        // if (data.type === 'ping') {
+        //     lastPingTimestamp = Date.now();
+        // }
+
+        if (data.command === 'reload') {
+            window.location.reload();
+        }
+
+        if (data.type === 'existingModels') {
+
+            console.log("\texistingModels, data.models:",data.models.length)
+
+            data.models.forEach((model, index) => {
+
+                console.log('\t\t'+index + '\t' + model.uuid);
+
+
+              if(playground.getObjectByName(model.uuid) == undefined) {
+
+                    console.log("\t\tmodel.uuid - load it:", model.uuid)
+                    requestModel(model.uuid, model.position);
+              
+              }  else {
+
+                    console.log("\t\tmodel.uuid - exist")
+
+
+              }
+
+
+            })
+
+            // data.models.forEach(model => {
+            //     // Load each model into the scene
+
+            //     if(playground.getObjectByName(model.uuid) == undefined) {
+            //         requestModel(model.uuid, model.position);
+            //         console.log("existingModels + model.uuid - ",model.uuid, " - loading - ")
+            //     } else {
+            //         console.log("existingModels - model.uuid - ",model.uuid, " - exists - ")
+            //     }
+            // });
+        }
+
+        if (data.type === 'modelRemoved') {
+            console.log("modelRemoved: data.uuid",data.uuid)
+           playground.remove(playground.getObjectByName(data.uuid))
+        }
+
 
     };
 
@@ -1509,107 +1613,194 @@ function connectWebSocket() {
 connectWebSocket()
 
 
-function requestModel(uuid, pos) {
+function broadcastNewModel(uuid, pos) {
+    console.log(" ---> broadcastNewModel", uuid)
+    const message = {
+        type: "broadcastNewModel",
+        uuid: uuid,
+        pos: pos
+    };
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(message));
+    } else {
+        console.error('WebSocket is not open. Cannot request the model.');
+    }
+}
 
+
+function requestNewModel(uuid, pos) {
+    console.log(" ---> requestModel", uuid)
+    const message = {
+        type: "requestNewModel",
+        uuid: uuid,
+        pos: pos
+    };
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(message));
+    } else {
+        console.error('WebSocket is not open. Cannot request the model.');
+    }
+}
+
+
+function requestModel(uuid, pos) {
+    console.log(" ---> requestModel", uuid)
     const message = {
         type: "requestModel",
         uuid: uuid,
         pos: pos
     };
-
     if (ws.readyState === WebSocket.OPEN) {
-    
         ws.send(JSON.stringify(message));
-    
     } else {
-    
         console.error('WebSocket is not open. Cannot request the model.');
-    
     }
+}
 
+function findTopMostParent(obj) {
+    let currentObject = obj;
+    // Traverse up the hierarchy until you find an object whose parent is the scene (playground)
+    while (currentObject.parent && currentObject.parent !== playground) {
+        currentObject = currentObject.parent;
+    }
+    return currentObject.name;  // This should be the UUID of the root group
 }
 
 
+function findRootObjectName(obj) {
+    let currentObj = obj;
+    while (currentObj.parent) {
+        currentObj = currentObj.parent;
+    }
+    return currentObj.name;
+}
 
 
+let clock = new THREE.Clock()
+let mixers = [];
+function updateMixers() {
+    let delta = clock.getDelta();
+    for (let i = 0; i < mixers.length; i++) {
+        mixers[i].update(delta);
+    }
+}
 
+function loadModel(file, pos, url_uuid) {
+    console.log(" ---> requestModel", url_uuid);
 
+    let position = JSON.parse(pos);
+    console.log("position", position);
 
-function loadModel(file, pos) {
+    loader.load(
+        file,
+        function (gltf) {  // onSuccess callback
+            let model = gltf.scene;
 
-    console.log("loadModel, pos", pos)
+            let modelGroup = new THREE.Group();
+            modelGroup.position.copy(position);
+            modelGroup.add(model);
+            modelGroup.name = url_uuid;
+            playground.add(modelGroup);
 
-    let x = pos.split(";")[0]
-    let y = pos.split(";")[1]
+            console.log("loadModel, name", modelGroup.name);
 
-    //const filePath = URL.createObjectURL(file);
+           // Handle animations
+            if (gltf.animations && gltf.animations.length) {
+                // Create a mixer and add it to the mixers array
+                let mixer = new THREE.AnimationMixer(modelGroup);
+                mixers.push(mixer);
 
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('/static/libs/draco/');
-    const loader = new GLTFLoader();
-    loader.setDRACOLoader(dracoLoader);
+                // Add all animations to the mixer
+                gltf.animations.forEach((clip) => {
+                    mixer.clipAction(clip).play();
+                });
+            }            
 
-
-    loader.load(file, function(gltf) {
-        let model = gltf.scene;
-
-        // Convert screen coordinates (x, y) to 3D space coordinates
-        mouse.x = (x / window.innerWidth) * 2 - 1;
-        mouse.y = -(y / window.innerHeight) * 2 + 1;
-
-        raycaster.setFromCamera(mouse, magicEye);
-        
-        let intersects = raycaster.intersectObjects(playground.children, true);
-        if (intersects.length > 0) {
-            let intersectPoint = intersects[0].point;
-            model.position.copy(intersectPoint);
-            model.position.y = 0;
-
-        } else {
-            model.position.set(0, 0, 0); // Default position if no intersection found
+        },
+        undefined, 
+        function (error) { 
+            console.error('Error loading model:', error);
         }
-
-        model.userData.fileName = file.name; // Store the file name
-        console.log("Store fileName:", file.name)
-        
-        playground.add(model);
-
-        //saveScene(); // Update the saved scene
-    });
+    );
 }
 
 
-// Function to load model from the given URL
-// function loadModelFromUrl(url) {
+function loadNewModel(file, pos, url_uuid) {
+    console.log(" ---> requestModel", url_uuid);
 
-//     console.log("loadModelFromUrl, url", url);
+    let position = JSON.parse(pos);
+    console.log("position", position);
 
-//     // Assume GLTFLoader and DRACOLoader are correctly set up
-//     const loader = new GLTFLoader();
-//     // Add the DRACOLoader if necessary
-//     const dracoLoader = new DRACOLoader();
-//     dracoLoader.setDecoderPath('/static/libs/draco/');
+    loader.load(
+        file,
+        function (gltf) {  // onSuccess callback
+            let model = gltf.scene;
 
-//     loader.setDRACOLoader(dracoLoader);
+            let modelGroup = new THREE.Group();
+            modelGroup.position.copy(position);
+            modelGroup.add(model);
+            modelGroup.name = url_uuid;
+            playground.add(modelGroup);
 
-//     loader.load(url, function (gltf) {
-//         let model = gltf.scene;
-//         // Rest of your logic to position and add the model to the scene
-//         // ...
-//         playground.add(model);
+            console.log("loadNewModel, name", modelGroup.name);
 
-//         saveScene(); // Update the saved scene
-//     });
-// }
+            broadcastNewModel(url_uuid, pos)
+
+           // Handle animations
+            if (gltf.animations && gltf.animations.length) {
+                // Create a mixer and add it to the mixers array
+                let mixer = new THREE.AnimationMixer(modelGroup);
+                mixers.push(mixer);
+
+                // Add all animations to the mixer
+                gltf.animations.forEach((clip) => {
+                    mixer.clipAction(clip).play();
+                });
+            }
+
+
+        },
+        undefined, 
+        function (error) { 
+            console.error('Error loading model:', error);
+        }
+    );
+}
+
+
+
+//             broadcastNewModel(url,data.pos, url_uuid)
+
+
+
+
 
 
 document.body.ondrop = (event) => {
+
     event.preventDefault();
+
+    let x = event.clientX;
+    let y = event.clientY;
+
+    // Convert screen coordinates (x, y) to 3D space coordinates
+    mouse.x = (x / window.innerWidth) * 2 - 1;
+    mouse.y = -(y / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, magicEye);
+
+    let intersects = raycaster.intersectObjects(playground.children, true);
+    let point = intersects[0].point;
+    let pointData = { x: point.x, y: point.y, z: point.z };
+    let pointString = JSON.stringify(pointData);    
+
 
     let file = event.dataTransfer.files[0];
     if (file && (file.name.endsWith('.glb') || file.name.endsWith('.gltf'))) {
         let formData = new FormData();
         formData.append('file', file);
+        formData.append('uploader', localStorage.getItem('clientID'));
+        formData.append('position', pointString);
 
         fetch('/upload', {
             method: 'POST',
@@ -1618,11 +1809,8 @@ document.body.ondrop = (event) => {
         .then(response => response.json())
         .then(data => {
             console.log('Upload successful', data);
-            
-            requestModel(data.uuid, `${event.clientX};${event.clientY}`)
-
-            // loadModel(data, event.clientX, event.clientY);
-
+            console.log("pointString", pointString)
+            requestNewModel(data.uuid, `${pointString}`)
         })
         .catch(error => console.error('Error:', error));
     } else {
@@ -1643,7 +1831,7 @@ function onWindowResize() {
 
 /*
 
-    Core ----------------------
+    ----------------------
 
 */
 
@@ -1698,6 +1886,10 @@ function recreateOutlineObject(object) {
 
     outlineObject.material = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.25 });
 
+    outlineObject.name = object.parent.parent.name;
+
+    console.log("outlineObject.name:",outlineObject.name)
+
     playground.add(outlineObject);
 }
 
@@ -1751,6 +1943,7 @@ function onMouseClick(event) {
 
         selectedObject = intersects[0].object;
         outlineObject = selectedObject.clone(true);
+        outlineObject.name = findTopMostParent(selectedObject)
         outlineObject.isOutline = true;
 
         if (selectedObject.parent && selectedObject.parent !== playground) {
@@ -1819,7 +2012,7 @@ document.addEventListener('mouseup', (event) => {
             playground.add(currentLine);
             currentLine = null;
             linePoints = [];
-            saveScene();
+            //saveScene();
         }
     }
 
@@ -1839,13 +2032,14 @@ document.addEventListener('mouseup', (event) => {
             recreateOutlineObject(selectedObject);
         }
 
-        saveScene()
+        //saveScene()
     }
 });
 
 
 
 document.addEventListener('mousedown', (event) => {
+
     if (isDrawMode) {
         currentLine = new THREE.Line(new THREE.BufferGeometry(), lineMaterial);
         const intersectPoint = getMousePositionIn3D(event);
@@ -1855,6 +2049,11 @@ document.addEventListener('mousedown', (event) => {
             playground.add(currentLine);
         }
     }
+
+    if (outlineObject) {
+        console.log(outlineObject)
+    }
+
 });
 
 
@@ -1917,52 +2116,26 @@ document.addEventListener('mousemove', (event) => {
 
 /* Keys - keyboard */
 function updatePosition(direction, shiftMultiplier, normalMultiplier) {
+    let t = playground.getObjectByName(outlineObject.name)
     const movementScale = shiftMultiplier ? 0.1 : normalMultiplier;
-    selectedObject.position.addScaledVector(direction, movementScale);
-    saveScene();
+    t.position.addScaledVector(direction, movementScale);
+    outlineObject.position.copy(t.position)
 }
 
 function changeScale(isIncreasing) {
+    let t = playground.getObjectByName(outlineObject.name)
     const scaleMultiplier = isIncreasing ? 1.03 : 0.96;
-
-    selectedObject.parent.scale.multiplyScalar(scaleMultiplier);        
-    outlineObject.scale.copy(selectedObject.parent.scale).multiplyScalar(1.012);
-
-    // if(selectedObject.parent) {
-    //     selectedObject.parent.scale.multiplyScalar(scaleMultiplier);        
-    //     outlineObject.scale.copy(selectedObject.parent.scale).multiplyScalar(1.012);
-    // } else {
-    //     selectedObject.scale.multiplyScalar(scaleMultiplier);                
-    //     outlineObject.scale.copy(selectedObject.scale).multiplyScalar(1.012);
-    // }
-    //outlineObject.scale.copy(selectedObject.scale).multiplyScalar(1.012);
-    saveScene();
+    t.scale.multiplyScalar(scaleMultiplier);        
+    outlineObject.scale.copy(t.scale).multiplyScalar(1.012);
 }
 
-function rotateObject() {
-
+function rotateObject() { 
     const q = new THREE.Quaternion();
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.1);
-
     console.log("rotateObject: - selectedObject.parent", selectedObject.parent)
-
-    // if(selectedObject.parent.type == 'Group') {
-    //  selectedObject.parent.quaternion.premultiply(q);    
-    // } else {
-    //    selectedObject.quaternion.premultiply(q);     
-    // }
-
-    // outlineObject.quaternion.premultiply(q);
-
-    if(selectedObject.parent) {
-        selectedObject.parent.quaternion.premultiply(q);
-    } else {
-        selectedObject.quaternion.premultiply(q);
-    }
+    let t = playground.getObjectByName(outlineObject.name)
+    t.quaternion.premultiply(q);
     outlineObject.quaternion.premultiply(q);
-
-    
-    saveScene();
 }
 
 
@@ -1970,8 +2143,6 @@ function rotateObject() {
     Blender - like camera position and rotation reset 
 
 */
-
-
 
 function setCameraPosition(number) {
     let camera = magicEye;
@@ -2040,171 +2211,6 @@ function setCameraPosition(number) {
     saveCameraPosition();
 }
 
-
-
-// function setCameraPosition(number) {
-//     let camera = magicEye;
-//     let targetPosition = new THREE.Vector3();
-
-//     // Get the world position of the selected object or default to the origin
-//     if (selectedObject) {
-//         selectedObject.getWorldPosition(targetPosition);
-//     } else {
-//         targetPosition.set(0, 0, 0);
-//     }
-
-//     // Calculate the distance from the camera to the target position
-//     let dist = camera.position.distanceTo(targetPosition);
-
-//     switch (number) {
-//         case 1: // Front view
-//             camera.position.set(targetPosition.x, targetPosition.y, targetPosition.z + dist);
-//             break;
-//         case 2: // Bottom view
-//             camera.position.set(targetPosition.x, targetPosition.y - dist, targetPosition.z);
-//             break;
-//         case 3: // Right view
-//             camera.position.set(targetPosition.x + dist, targetPosition.y, targetPosition.z);
-//             break;
-//         case 4: // Left view
-//             camera.position.set(targetPosition.x - dist, targetPosition.y, targetPosition.z);
-//             break;
-//         case 5: // User-defined or reset view
-//             // Define this based on your requirements
-//             break;
-//         case 6: // Back view
-//             camera.position.set(targetPosition.x, targetPosition.y, targetPosition.z - dist);
-//             break;
-//         case 7: // Top view
-//             camera.position.set(targetPosition.x, targetPosition.y + dist, targetPosition.z);
-//             break;
-//         // Add more cases as needed
-//     }
-
-//     // Update the camera to look at the target position
-//     camera.lookAt(targetPosition);
-//     camera.updateProjectionMatrix();
-
-//     // Update controls to orbit around the new target
-//     controls.target.copy(targetPosition);
-//     controls.update();
-
-//     // Optionally save the camera position if required
-//     saveCameraPosition();
-// }
-
-
-
-
-// function setCameraPosition(number) {
-//     let camera = magicEye;
-//     let targetPosition = new THREE.Vector3();
-
-//     // Determine the distance of the camera from the origin or selected object
-//     let dist = Math.sqrt(camera.position.x ** 2 + camera.position.y ** 2 + camera.position.z ** 2);
-
-//     // Get the world position of the selected object or default to the origin
-//     if (selectedObject) {
-//         selectedObject.getWorldPosition(targetPosition);
-//     } else {
-//         targetPosition.set(0, 0, 0);
-//     }
-
-//     switch (number) {
-//         case 1: // Front view
-//             camera.position.set(targetPosition.x, targetPosition.y, targetPosition.z + dist);
-//             break;
-//         case 2: // Bottom view
-//             camera.position.set(targetPosition.x, targetPosition.y - dist, targetPosition.z);
-//             break;
-//         case 3: // Right view
-//             camera.position.set(targetPosition.x + dist, targetPosition.y, targetPosition.z);
-//             break;
-//         case 4: // Left view
-//             camera.position.set(targetPosition.x - dist, targetPosition.y, targetPosition.z);
-//             break;
-//         case 5: // User-defined or reset view
-//             // Define this based on your requirements
-//             break;
-//         case 6: // Back view
-//             camera.position.set(targetPosition.x, targetPosition.y, targetPosition.z - dist);
-//             break;
-//         case 7: // Top view
-//             camera.position.set(targetPosition.x, targetPosition.y + dist, targetPosition.z);
-//             break;
-//         // Add more cases as needed
-//     }
-
-//     // Update the camera to look at the target position
-//     camera.lookAt(targetPosition);
-//     camera.updateProjectionMatrix();
-
-//     // Update controls to orbit around the new target
-//     controls.target.copy(targetPosition);
-//     controls.update();
-
-//     // Optionally save the camera position if required
-//     saveCameraPosition();
-// }
-
-
-// function setCameraPosition(number) {
-
-
-//     let camera = magicEye;
-//     let targetPosition = new THREE.Vector3();
-//     let dist = Math.sqrt(camera.position.x ** 2 + camera.position.y ** 2 + camera.position.z ** 2);
-
-//     if (selectedObject) {
-//         selectedObject.getWorldPosition(targetPosition);
-//     } else {
-//         targetPosition.set(0, 0, 0);
-//     }    
-
-//     switch (number) {
-//         case 1: // Front view
-//             camera.position.set(0, 0, dist);
-//             camera.rotation.set(0, 0, 0);
-//             break;
-//         case 2: // Bottom view
-//             camera.position.set(0, -dist, 0);
-//             camera.rotation.set(Math.PI / 2, 0, 0);
-//             break;
-//         case 3: // Right view
-//             camera.position.set(dist, 0, 0);
-//             camera.rotation.set(0, -Math.PI / 2, 0);
-//             break;
-//         case 4: // Left view
-//             camera.position.set(-dist, 0, 0);
-//             camera.rotation.set(0, Math.PI / 2, 0);
-//             break;
-//         case 5: // User-defined or reset view
-//             // Define this based on your requirements
-//             break;
-//         case 6: // Back view
-//             camera.position.set(0, 0, -dist);
-//             camera.rotation.set(0, Math.PI, 0);
-//             break;
-//         case 7: // Top view
-//             camera.position.set(0, dist, 0);
-//             camera.rotation.set(-Math.PI / 2, 0, 0);
-//             break;
-//         // Add more cases as needed
-//     }
-
-//     controls.target.set(0, 0, 0);
-//     camera.updateProjectionMatrix();
-//     controls.update();
-
-//     saveCameraPosition();
-
-// }
-
-
-
-/*
-
-    Create specific basic shapes   */
 
 
 function createCube() {
@@ -2277,10 +2283,13 @@ function removeObject() {
     //     selectedObject = selectedObject.parent;
     // }
     
+    let uuid
+
     if (outlineObject && outlineObject.parent) {
         outlineObject.parent.remove(outlineObject);
     }
-    
+
+    uuid = outlineObject.name; //findTopMostParent(selectedObject)    
     outlineObject = null;
     
     if (selectedObject.parent) {
@@ -2288,9 +2297,20 @@ function removeObject() {
     } else {
         playground.remove(selectedObject);
     }
+
+    console.log("removeObject uuid", uuid)
+
+    ws.send(JSON.stringify({
+        type: 'removeModel',
+        uuid: uuid
+    }));
+
+
     selectedObject = null;
 
-    saveScene();
+
+
+    //saveScene();
 }
 
 function randomizeTransform(group) {
@@ -2322,7 +2342,7 @@ function catchCreateCube() {
     if ((event.key === 'c' || event.key === 'C') && shiftPressed && aPressed) {
         playground.add(createCube());
         console.log("createCube", "catchCreateCube");
-        saveScene();
+        //saveScene();
     }
 }
 
@@ -2347,7 +2367,7 @@ document.addEventListener('keydown', (event) => {
             playground.add(currentLine);
             currentLine = null;
             linePoints = [];
-            saveScene();
+            //saveScene();
         }
     }
 
